@@ -3,14 +3,22 @@ import { useQuery, useMutation } from '@apollo/client';
 import { Box, TextField, Button, Select, MenuItem, FormControl, InputLabel, Snackbar } from '@mui/material';
 import { Formik, Form } from 'formik';
 import { GET_PPM_BY_PK, GET_SUPPLIERS, GET_DISCIPLINES } from "../../api/queries/ppmdetail";
-import { UPDATE_PPM } from "../../api/mutations/ppmdetail";
+import { UPDATE_PPM, UPDATE_DISCIPLINE } from "../../api/mutations/ppmdetail";
+import { useParams, useLocation } from 'react-router-dom';
 
-const PPMDetailsTab = ({ ppm_id, setDisciplineAndBuilding, refetch }) => {
-  const { loading, data } = useQuery(GET_PPM_BY_PK, { variables: { ppm_id: parseInt(ppm_id) } });
+const PPMDetailsTab = ({ setDisciplineAndBuilding, refetch }) => {
+  const { ppm_id } = useParams();
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const disc_id = queryParams.get('disc_id');
+  const bld_id = queryParams.get('bld_id');
+
+  const { loading, data, error, refetch: refetchPPM } = useQuery(GET_PPM_BY_PK, { variables: { ppm_id: parseInt(ppm_id) } });
   const [updatePPM] = useMutation(UPDATE_PPM);
+  const [updateDiscipline] = useMutation(UPDATE_DISCIPLINE);
 
-  const { data: suppliersData, loading: suppliersLoading } = useQuery(GET_SUPPLIERS);
-  const { data: disciplinesData, loading: disciplinesLoading } = useQuery(GET_DISCIPLINES);
+  const { data: suppliersData, loading: suppliersLoading, refetch: refetchSuppliers } = useQuery(GET_SUPPLIERS);
+  const { data: disciplinesData, loading: disciplinesLoading, refetch: refetchDisciplines } = useQuery(GET_DISCIPLINES);
 
   const [editMode, setEditMode] = useState(false);
   const [ppmDetails, setPPMDetails] = useState({});
@@ -18,11 +26,24 @@ const PPMDetailsTab = ({ ppm_id, setDisciplineAndBuilding, refetch }) => {
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
   useEffect(() => {
-    if (data) {
-      setPPMDetails(data.ppm_service_plan_by_pk);
-      setDisciplineAndBuilding(data.ppm_service_plan_by_pk.fk_disc_id, data.ppm_service_plan_by_pk.fk_bld_id);
+    if (data && data.ppm_service_plan_by_pk) {
+      console.log('Data received:', data);
+      const plan = data.ppm_service_plan_by_pk;
+      setPPMDetails({
+        ...plan,
+        ppm_cost: plan.ppm_building_service_plans[0]?.ppm_cost || '',
+      });
+      const { fk_disc_id, fk_bld_id } = plan;
+      console.log('Discipline ID:', fk_disc_id);
+      console.log('Building ID:', fk_bld_id);
+      setDisciplineAndBuilding(fk_disc_id, fk_bld_id);
     }
   }, [data, setDisciplineAndBuilding]);
+
+  useEffect(() => {
+    console.log('Discipline ID:', disc_id);
+    console.log('Building ID:', bld_id);
+  }, [disc_id, bld_id]);
 
   const handleSavePPM = async (values) => {
     try {
@@ -46,13 +67,24 @@ const PPMDetailsTab = ({ ppm_id, setDisciplineAndBuilding, refetch }) => {
           ppm_service_name: values.ppm_service_name,
           ppm_standard: values.ppm_standard,
           ppm_status: values.ppm_status,
-          ppm_type: values.ppm_type
+          ppm_type: values.ppm_type,
+          fk_disc_id: values.fk_disc_id,
         }
       });
-      refetch();
+      await updateDiscipline({
+        variables: {
+          ppm_id: parseInt(ppm_id),
+          fk_disc_id: values.fk_disc_id,
+        }
+      });
       setSnackbarMessage('PPM details updated successfully!');
       setSnackbarOpen(true);
       setEditMode(false);
+      setTimeout(() => {
+        refetchPPM();
+        refetchSuppliers();
+        refetchDisciplines();
+      }, 500); // Adding a 500ms delay before refetching
     } catch (error) {
       console.error("Error updating PPM:", error);
       setSnackbarMessage(`Error updating PPM: ${error.message}`);
@@ -62,6 +94,7 @@ const PPMDetailsTab = ({ ppm_id, setDisciplineAndBuilding, refetch }) => {
 
   const handleCancel = () => {
     setEditMode(false);
+    refetchPPM();
     setPPMDetails(data.ppm_service_plan_by_pk); // Reset to original values
   };
 
@@ -70,7 +103,23 @@ const PPMDetailsTab = ({ ppm_id, setDisciplineAndBuilding, refetch }) => {
     setSnackbarMessage('');
   };
 
+  useEffect(() => {
+    if (!editMode) {
+      refetchPPM();
+      refetchSuppliers();
+      refetchDisciplines();
+    }
+  }, [editMode, refetchPPM, refetchSuppliers, refetchDisciplines]);
+
   if (loading || suppliersLoading || disciplinesLoading) return <p>Loading...</p>;
+
+  if (error) return <p>Error: {error.message}</p>;
+
+  if (!data || !data.ppm_service_plan_by_pk) {
+    return <p>No details found for the selected PPM</p>;
+  }
+
+  const ppm_service_plan = data.ppm_service_plan_by_pk;
 
   return (
     <>
@@ -120,8 +169,8 @@ const PPMDetailsTab = ({ ppm_id, setDisciplineAndBuilding, refetch }) => {
                 </>
               ) : (
                 <>
-                  <TextField label="Supplier" value={data?.ppm_service_plan_by_pk?.supplier?.sup_name || ''} disabled />
-                  <TextField label="Discipline" value={data?.ppm_service_plan_by_pk?.ppm_discipline?.disc_name || ''} disabled />
+                  <TextField label="Supplier" value={ppm_service_plan.supplier?.sup_name || ''} disabled />
+                  <TextField label="Discipline" value={ppm_service_plan.ppm_discipline?.disc_name || ''} disabled />
                 </>
               )}
 
@@ -156,6 +205,8 @@ const PPMDetailsTab = ({ ppm_id, setDisciplineAndBuilding, refetch }) => {
 };
 
 export default PPMDetailsTab;
+
+
 
 
 

@@ -18,3 +18,15 @@ export const UPDATE_PPM_DISCIPLINE = gql`
     }
   }
 `;
+
+export const UPDATE_PPM_SCHEDULE_DATE = gql`
+  mutation UpdatePPMScheduleDate($ppm_bsp_key: Int!, $ppm_b_schedule_date: date!) {
+    update_ppm_building_service_plan_by_pk(
+      pk_columns: { ppm_bsp_key: $ppm_bsp_key },
+      _set: { ppm_b_schedule_date: $ppm_b_schedule_date }
+    ) {
+      ppm_bsp_key
+      ppm_b_schedule_date
+    }
+  }
+`;

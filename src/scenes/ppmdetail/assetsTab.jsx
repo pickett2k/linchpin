@@ -4,13 +4,17 @@ import { Box, Typography, Select, MenuItem, Button, List, ListItem, ListItemText
 import { Delete as DeleteIcon } from '@mui/icons-material';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { GET_ASSETS_OVERVIEW, GET_LINKED_ASSETS } from "../../api/queries/ppmdetail";
+import { useLocation } from 'react-router-dom';
+import { GET_ASSETS_OVERVIEW, GET_LINKED_ASSETS, GET_ASSETS_BY_DISCIPLINE_AND_BUILDING } from "../../api/queries/ppmdetail";
 import { ADD_ASSET_TO_PPM, DELETE_ASSET_FROM_PPM } from "../../api/mutations/ppmdetail";
 
 const AssetsTab = ({ ppm_id, refetch }) => {
-  console.log('AssetsTab initialized with PPM ID:', ppm_id);
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const bld_id = queryParams.get('bld_id');
+  const disc_id = queryParams.get('disc_id');
 
-  const { data: assetsData, loading: assetsLoading, error: assetsError } = useQuery(GET_ASSETS_OVERVIEW, {
+  const { data: assetsOverviewData, loading: assetsOverviewLoading, error: assetsOverviewError, refetch: refetchAssetsOverview } = useQuery(GET_ASSETS_OVERVIEW, {
     variables: { ppm_id: parseInt(ppm_id) },
   });
 
@@ -18,14 +22,20 @@ const AssetsTab = ({ ppm_id, refetch }) => {
     variables: { ppm_id: parseInt(ppm_id) },
   });
 
+  const { data: availableAssetsData, refetch: refetchAvailableAssets } = useQuery(GET_ASSETS_BY_DISCIPLINE_AND_BUILDING, {
+    skip: !disc_id || !bld_id,
+    variables: { fk_disc_id: parseInt(disc_id), fk_pk_bld_id: parseInt(bld_id) },
+  });
+
   const [addAssetToPPM] = useMutation(ADD_ASSET_TO_PPM, {
     onError: (error) => {
-      console.error("Error adding asset:", error);
       setSnackbarMessage(`Error adding asset: ${error.message}`);
       setSnackbarOpen(true);
     },
     onCompleted: () => {
       refetchLinkedAssets();
+      refetchAssetsOverview();
+      refetchAvailableAssets();
       setSnackbarMessage('Asset added successfully!');
       setSnackbarOpen(true);
     }
@@ -33,12 +43,13 @@ const AssetsTab = ({ ppm_id, refetch }) => {
 
   const [deleteAssetFromPPM] = useMutation(DELETE_ASSET_FROM_PPM, {
     onError: (error) => {
-      console.error("Error deleting asset:", error);
       setSnackbarMessage(`Error deleting asset: ${error.message}`);
       setSnackbarOpen(true);
     },
     onCompleted: () => {
       refetchLinkedAssets();
+      refetchAssetsOverview();
+      refetchAvailableAssets();
       setSnackbarMessage('Asset deleted successfully!');
       setSnackbarOpen(true);
     }
@@ -51,27 +62,18 @@ const AssetsTab = ({ ppm_id, refetch }) => {
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
   useEffect(() => {
-    if (assetsData && linkedAssetsData) {
-      console.log('Fetched assets data:', assetsData);
-      console.log('Fetched linked assets data:', linkedAssetsData);
-
-      const disciplineId = assetsData.ppm_service_plan_by_pk.fk_disc_id;
-      const buildingId = assetsData.ppm_service_plan_by_pk.ppm_building_service_plans[0]?.fk_bld_id;
-
-      const linked = linkedAssetsData.ppm_asset_service_plan.map(a => a.asset);
-      const available = assetsData.vw_asset_bld_org.filter(a => 
-        a.disc_id === disciplineId && 
-        a.bld_id === buildingId && 
+    if (linkedAssetsData && availableAssetsData) {
+      const linked = linkedAssetsData.ppm_asset_service_plan
+        .filter(l => l.asset.location?.fk_bld_id === parseInt(bld_id)) // Ensure linked assets are filtered by building ID
+        .map(a => a.asset);
+      const available = availableAssetsData.asset.filter(a =>
         !linked.find(la => la.as_id === a.as_id)
       );
-
-      console.log('Linked assets:', linked);
-      console.log('Available assets:', available);
 
       setLinkedAssets(linked);
       setAvailableAssets(available);
     }
-  }, [assetsData, linkedAssetsData]);
+  }, [linkedAssetsData, availableAssetsData, bld_id]);
 
   const handleAddAssets = async (values) => {
     try {
@@ -101,8 +103,8 @@ const AssetsTab = ({ ppm_id, refetch }) => {
     assetsToAdd: Yup.array().of(Yup.number()).required('Select at least one asset to add.')
   });
 
-  if (assetsLoading || linkedAssetsLoading) return <p>Loading...</p>;
-  if (assetsError) return <p>Error loading assets: {assetsError.message}</p>;
+  if (assetsOverviewLoading || linkedAssetsLoading) return <p>Loading...</p>;
+  if (assetsOverviewError) return <p>Error loading assets overview: {assetsOverviewError.message}</p>;
   if (linkedAssetsError) return <p>Error loading linked assets: {linkedAssetsError.message}</p>;
 
   return (
@@ -173,6 +175,10 @@ const AssetsTab = ({ ppm_id, refetch }) => {
 };
 
 export default AssetsTab;
+
+
+
+
 
 
 

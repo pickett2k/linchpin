@@ -10,7 +10,6 @@ export const GET_PPM_BY_PK = gql`
       last_service_date
       next_service_date
       ppm_schedule
-      ppm_cost
       notes
       ppm_description
       ppm_frequency
@@ -27,6 +26,13 @@ export const GET_PPM_BY_PK = gql`
         sup_name
       }
       ppm_building_service_plans {
+        ppm_bsp_key
+        ppm_b_last_service_date
+        ppm_b_next_service_date
+        ppm_b_schedule_date
+        ppm_fk_ppm_id
+        ppm_cost
+        fk_bld_id
         building {
           pk_bld_id
           bld_name
@@ -39,13 +45,12 @@ export const GET_PPM_BY_PK = gql`
 // GET_ASSETS_BY_DISCIPLINE_AND_BUILDING query
 export const GET_ASSETS_BY_DISCIPLINE_AND_BUILDING = gql`
   query GetAssetsByDisciplineAndBuilding($fk_disc_id: Int!, $fk_pk_bld_id: Int!) {
-  asset(where: {fk_disc_id: {_eq: $fk_disc_id}, location: {fk_bld_id: {_eq: $fk_pk_bld_id}}}) {
-    as_id
-    as_name
+    vw_asset_bld_org(where: {disc_id: {_eq: $fk_disc_id}, bld_id: {_eq: $fk_pk_bld_id}}) {
+      as_id
+      as_name
+    }
   }
-}
 `;
-
 export const GET_ASSETS_OVERVIEW = gql`
 query GetAssetsOverview($ppm_id: Int!) {
   ppm_service_plan_by_pk(ppm_id: $ppm_id) {
@@ -53,16 +58,6 @@ query GetAssetsOverview($ppm_id: Int!) {
     ppm_building_service_plans {
       fk_bld_id
     }
-  }
-  vw_asset_bld_org {
-    as_id
-    as_name
-    disc_id
-    ppm_disc_name
-    bld_id
-    bld_name
-    pk_org_id
-    org_name
   }
 }
 `;
@@ -73,18 +68,14 @@ query GetLinkedAssets($ppm_id: Int!) {
     asset {
       as_id
       as_name
-    }
-    ppm_service_plan {
-      ppm_building_service_plans {
+      location {
         fk_bld_id
       }
     }
   }
 }
-  `;
+`;
 
-
-// GET_ASSETS_BY_PPM query
 export const GET_ASSETS_BY_PPM = gql`
   query GetAssetsByPPM($ppm_fk_ppm_id: Int!) {
   ppm_asset_service_plan(where: {ppm_fk_ppm_id: {_eq: $ppm_fk_ppm_id}}) {

@@ -9,8 +9,8 @@ import * as Yup from 'yup';
 import {
   GET_GROUPS, GET_TYPES_BY_GROUP, GET_CATEGORIES_BY_TYPE, GET_ORGANIZATIONS,
   GET_BUILDINGS_BY_ORG, GET_LOCATIONS_BY_BUILDING, GET_PPM_DISCIPLINES, GET_REACT_DISCIPLINES
-} from '../../src/api/queries/assetmanagement'; // Adjust the path as necessary
-import { CREATE_ASSET } from '../api/mutations/assetmanagement'; // Adjust the path as necessary
+} from '../../src/api/queries/assetmanagement';
+import { CREATE_ASSET } from '../api/mutations/assetmanagement';
 import { tokens } from "../theme";
 
 const AssetModal = ({ isOpen, onClose, refetchAssets }) => {
@@ -90,7 +90,6 @@ const AssetModal = ({ isOpen, onClose, refetchAssets }) => {
     as_expected_life: '',
     as_business_critical: '',
     as_warranty_length: '',
-    as_warranty_expiry: '',
     as_status: '',
     as_extra_info: '',
     as_access_restrictions: '',
@@ -108,23 +107,26 @@ const AssetModal = ({ isOpen, onClose, refetchAssets }) => {
     as_serial_num: Yup.string().required('Serial Number is required'),
     fk_loc_id: Yup.number().required('Location is required'),
     fk_disc_id: Yup.number().required('PPM Discipline is required'),
-    fk_r_disc_id: Yup.number().required('Reactive Discipline is required')
+    fk_r_disc_id: Yup.number().required('Reactive Discipline is required'),
+    as_manufacture_year: Yup.number().max(new Date().getFullYear(), 'Manufacture year cannot be in the future'),
+    as_expected_life: Yup.number().nullable().test('len', 'Must be at most 2 digits', val => !val || val.toString().length <= 2),
+    as_warranty_length: Yup.number().nullable().test('len', 'Must be at most 2 digits', val => !val || val.toString().length <= 2),
+    as_last_service_date: Yup.date().nullable().max(new Date(), 'Last service date cannot be in the future')
   });
 
-  const handleSubmit = async (values) => {
+  const handleSubmit = async (values, { resetForm }) => {
     const submitValues = {
       as_name: values.as_name,
       as_manufacturer: values.as_manufacturer,
-      as_manufacture_year: values.as_manufacture_year || "",
+      as_manufacture_year: values.as_manufacture_year || null,
       as_model_name: values.as_model_name,
       as_serial_num: values.as_serial_num,
       as_expected_life: values.as_expected_life || null,
       as_business_critical: values.as_business_critical || null,
       as_warranty_length: values.as_warranty_length || null,
-      as_warranty_expiry: values.as_warranty_expiry || null,
       as_status: values.as_status || null,
-      as_extra_info: values.as_extra_info || "",
-      as_access_restrictions: values.as_access_restrictions || "",
+      as_extra_info: values.as_extra_info || "null", // Explicitly set "null" as a string if empty
+      as_access_restrictions: values.as_access_restrictions || "null", // Explicitly set "null" as a string if empty
       as_last_service_date: values.as_last_service_date || null,
       as_parent_id: values.as_parent_id || null,
       fk_loc_id: parseInt(values.fk_loc_id),
@@ -140,23 +142,40 @@ const AssetModal = ({ isOpen, onClose, refetchAssets }) => {
         variables: submitValues
       });
       refetchAssets();
+      resetForm();
+      handleResetSelections();
       onClose();
     } catch (error) {
       console.error("Error creating asset:", error);
     }
   };
 
+  const handleCancel = (resetForm) => {
+    resetForm();
+    handleResetSelections();
+    onClose();
+  };
+
+  const handleResetSelections = () => {
+    setSelectedOrg('');
+    setSelectedBuilding('');
+    setSelectedLocation('');
+    setSelectedGroup('');
+    setSelectedType('');
+    setSelectedCategory('');
+  };
+
   return (
-    <Dialog open={isOpen} onClose={onClose}>
+    <Dialog open={isOpen} onClose={() => handleCancel()} maxWidth="md" fullWidth>
       <DialogTitle>Create New Asset</DialogTitle>
-      <DialogContent>
+      <DialogContent sx={{ height: '80vh' }}>
         <Box sx={{ backgroundColor: colors.grey[800], color: colors.grey[100], p: 3, borderRadius: 1 }}>
           <Formik
             initialValues={initialValues}
             validationSchema={validationSchema}
             onSubmit={handleSubmit}
           >
-            {({ values, errors, touched, handleChange, handleBlur, isSubmitting }) => (
+            {({ values, errors, touched, handleChange, handleBlur, isSubmitting, resetForm }) => (
               <Form>
                 <FormControl fullWidth margin="normal" disabled={loadingOrgs}>
                   <InputLabel sx={{ color: colors.grey[100] }}>Organization</InputLabel>
@@ -371,20 +390,6 @@ const AssetModal = ({ isOpen, onClose, refetchAssets }) => {
                       InputLabelProps={{ sx: { color: colors.grey[100] } }}
                       sx={{ input: { color: colors.grey[100] } }}
                     />
-                    <TextField
-                      fullWidth
-                      margin="normal"
-                      label="Warranty Expiry"
-                      name="as_warranty_expiry"
-                      type="date"
-                      value={values.as_warranty_expiry}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={touched.as_warranty_expiry && Boolean(errors.as_warranty_expiry)}
-                      helperText={touched.as_warranty_expiry && errors.as_warranty_expiry}
-                      InputLabelProps={{ shrink: true, sx: { color: colors.grey[100] } }}
-                      sx={{ input: { color: colors.grey[100] } }}
-                    />
                     <FormControl fullWidth margin="normal">
                       <InputLabel sx={{ color: colors.grey[100] }}>Operational Status</InputLabel>
                       <Select
@@ -496,7 +501,7 @@ const AssetModal = ({ isOpen, onClose, refetchAssets }) => {
                 )}
 
                 <DialogActions>
-                  <Button onClick={onClose} sx={{ color: colors.grey[100] }}>Cancel</Button>
+                  <Button onClick={() => handleCancel(resetForm)} sx={{ color: colors.grey[100] }}>Cancel</Button>
                   <Button type="submit" sx={{ color: colors.grey[100] }} disabled={isSubmitting || loadingCreate}>
                     {loadingCreate ? <CircularProgress size={24} /> : 'Create Asset'}
                   </Button>
@@ -511,6 +516,13 @@ const AssetModal = ({ isOpen, onClose, refetchAssets }) => {
 };
 
 export default AssetModal;
+
+
+
+
+
+
+
 
 
 

@@ -43,29 +43,26 @@ const Calendar = () => {
 
   useEffect(() => {
     if (data) {
-      const buildingMap = new Map(data.buildings?.map(building => [building.pk_bld_id, building.bld_name]));
-
-      const plans = data.ppm_service_plan?.map(plan => {
-        const bld_name = (() => {
-          const buildingServicePlan = plan.ppm_building_service_plans?.[0]; // Adjust the indexing if necessary
-          const buildingId = buildingServicePlan?.building?.pk_bld_id;
-          return buildingMap.get(buildingId) || "N/A";
-        })();
-
-        return {
-          id: plan.ppm_id,
-          title: plan.ppm_description,
-          start: plan.ppm_schedule,
+      const plans = data.ppm_service_plan?.flatMap(plan =>
+        plan.ppm_building_service_plans.map(bsp => ({
+          id: bsp.ppm_bsp_key,
+          title: plan.ppm_service_name,
+          start: bsp.ppm_b_schedule_date,
           extendedProps: {
-            assets: plan.ppm_asset_service_plans?.map(sp => ({
+            ppm_bsp_key: bsp.ppm_bsp_key,
+            ppm_fk_ppm_id: plan.ppm_id,
+            fk_disc_id: plan.ppm_discipline?.disc_name,
+            fk_bld_id: bsp.fk_bld_id,
+            disc_name: plan.ppm_discipline?.disc_name,
+            bld_name: data.buildings.find(bld => bld.pk_bld_id === bsp.fk_bld_id)?.bld_name,
+            assets: data.ppm_asset_service_plan?.map(sp => ({
               as_id: sp.asset?.as_id,
               as_name: sp.asset?.as_name,
             })),
-            disc_name: plan.ppm_discipline?.disc_name,
-            bld_name,
-          },
-        };
-      });
+            ppm_b_schedule_date: bsp.ppm_b_schedule_date,
+          }
+        }))
+      );
 
       setCurrentEvents(plans);
       setFilteredEvents(plans);
@@ -123,13 +120,13 @@ const Calendar = () => {
   const handleEventDrop = async (eventDropInfo) => {
     const { event } = eventDropInfo;
     const newStart = format(new Date(event.startStr), 'yyyy-MM-dd'); // Ensure date is in the correct format
-    const ppm_id = parseInt(event.id);
+    const ppm_bsp_key = event.id;
 
     try {
       await updateServicePlan({
         variables: {
-          ppm_id,
-          ppm_schedule: newStart,
+          ppm_bsp_key,
+          ppm_b_schedule_date: newStart,
         },
       });
 
@@ -228,17 +225,17 @@ const Calendar = () => {
                   primary={event.title}
                   secondary={
                     <>
-                      <Typography>
+                      <Typography component="span">
                         {formatDate(event.start, {
                           year: "numeric",
                           month: "short",
                           day: "numeric",
                         })}
                       </Typography>
-                      <Typography>
+                      <Typography component="span">
                         Discipline: {event.extendedProps?.disc_name || "N/A"}
                       </Typography>
-                      <Typography>
+                      <Typography component="span">
                         Building: {event.extendedProps?.bld_name || "N/A"}
                       </Typography>
                     </>
@@ -283,10 +280,14 @@ const Calendar = () => {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         event={selectedEvent}
+        refetch={refetch} // Pass refetch function to the EventModal
       />
     </Box>
   );
 };
 
 export default Calendar;
+
+
+
 

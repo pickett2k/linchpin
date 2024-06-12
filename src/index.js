@@ -7,7 +7,7 @@ import { setContext } from '@apollo/client/link/context';
 import { ApolloClient, ApolloProvider, createHttpLink, InMemoryCache } from '@apollo/client';
 
 const httpLink = createHttpLink({
-  uri: 'http://localhost:8080/v1/graphql', // Your Hasura GraphQL endpoint
+  uri: 'http://80.5.12.202:8080/v1/graphql', // Your Hasura GraphQL endpoint
 });
 
 

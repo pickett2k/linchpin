@@ -40,6 +40,7 @@ const AssetManagement = () => {
   }, [overviewData, detailsData, categoriesData]);
 
   const handleToggleArchived = (event) => {
+    console.log('Toggle archived:', event.target.checked);
     setShowArchived(event.target.checked);
   };
 
@@ -152,15 +153,31 @@ const AssetManagement = () => {
           variant="contained"
           color="primary"
           onClick={openModal}
-          sx={{ backgroundColor: colors.greenAccent[600], color: colors.grey[400], }}
+          sx={{ backgroundColor: colors.greenAccent[600], color: colors.grey[100], }}
         >
           Create New Asset
         </Button>
         <FormControlLabel
-          control={<Switch checked={showArchived} onChange={handleToggleArchived} />}
-          label="Show Archived"
-          sx={{ ml: 'auto' }}
-        />
+  control={
+    <Switch 
+      checked={showArchived} 
+      onChange={handleToggleArchived} 
+      sx={{
+        '& .MuiSwitch-switchBase.Mui-checked': {
+          color: colors.greenAccent[500],
+        },
+        '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+          backgroundColor: colors.greenAccent[500],
+        },
+      }}
+    />
+  }
+  label="Show Archived"
+  sx={{ 
+    ml: 'auto', 
+    color: colors.grey[100] // Adjust this color for better visibility in dark mode
+  }}
+/>
       </Box>
       <Box
         m="40px 0 0 0"
@@ -195,6 +212,9 @@ const AssetManagement = () => {
           "& .MuiDataGrid-toolbarContainer .MuiButton-text": {
             color: `${colors.greenAccent[600]} !important`,
           },
+          '& .MuiDataGrid-main': {
+            overflowX: 'auto',
+          },
         }}
       >
         <DataGrid
@@ -205,6 +225,7 @@ const AssetManagement = () => {
           }}
           getRowId={(row) => row.as_id}
           checkboxSelection
+          autoPageSize
           columnVisibilityModel={columnVisibilityModel}
           onColumnVisibilityModelChange={handleColumnVisibilityModelChange}
         />
@@ -216,6 +237,7 @@ const AssetManagement = () => {
 };
 
 export default AssetManagement;
+
 
 
 

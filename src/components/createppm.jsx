@@ -7,8 +7,11 @@ import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import {
-  GET_PPM_DISCIPLINES, CREATE_PPM_SERVICE_PLAN, CREATE_PPM_BUILDING_RELATIONSHIP, GET_BUILDINGS, GET_SUPPLIERS, GET_ORGANIZATIONS
-} from '../crudQueries';
+  CREATE_PPM_SERVICE_PLAN, CREATE_PPM_BUILDING_RELATIONSHIP, INSERT_INSTRUCTION
+} from '../api/mutations/ppmdata';
+import {
+  GET_PPM_DISCIPLINES, GET_BUILDINGS, GET_SUPPLIERS, GET_ORGANIZATIONS
+} from '../api/queries/ppmdata';
 import { useTheme } from '@mui/material/styles';
 import { tokens } from "../theme";
 
@@ -22,6 +25,7 @@ const CreatePPMServicePlan = ({ open, onClose, onCreate }) => {
 
   const [createPPMServicePlan] = useMutation(CREATE_PPM_SERVICE_PLAN);
   const [linkServicePlanToBuilding] = useMutation(CREATE_PPM_BUILDING_RELATIONSHIP);
+  const [insertInstruction] = useMutation(INSERT_INSTRUCTION);
 
   const [selectedOrganization, setSelectedOrganization] = useState('');
   const [instructions, setInstructions] = useState([]);
@@ -63,7 +67,6 @@ const CreatePPMServicePlan = ({ open, onClose, onCreate }) => {
             last_service_date: lastServiceDate,
             fk_disc_id: values.fk_disc_id,
             fk_sup_id: values.fk_sup_id,
-            ppm_cost: values.ppm_cost,
             notes: values.notes,
             ppm_description: values.ppm_description,
             ppm_frequency: values.ppm_frequency,
@@ -81,12 +84,13 @@ const CreatePPMServicePlan = ({ open, onClose, onCreate }) => {
 
       const ppmId = data.insert_ppm_service_plan_one.ppm_id;
 
-      // Link Service Plan to Buildings
+      // Link Service Plan to Buildings with Cost
       const linkPromises = values.buildings.map(buildingId =>
         linkServicePlanToBuilding({
           variables: {
             ppm_id: ppmId,
             building_id: buildingId,
+            ppm_cost: parseInt(values.ppm_cost, 10),  // Ensure cost is an integer
             supplier_id: values.fk_sup_id
           }
         })
@@ -95,6 +99,20 @@ const CreatePPMServicePlan = ({ open, onClose, onCreate }) => {
       await Promise.all(linkPromises);
 
       console.log("PPM Service Plan linked to buildings");
+
+      // Insert Instructions
+      const instructionPromises = instructions.map(instruction =>
+        insertInstruction({
+          variables: {
+            ppm_id: ppmId,
+            instruction: instruction
+          }
+        })
+      );
+
+      await Promise.all(instructionPromises);
+
+      console.log("Instructions inserted");
 
       setSubmitting(false);
       onCreate();  // Call the callback function to refresh the data
@@ -426,6 +444,8 @@ const CreatePPMServicePlan = ({ open, onClose, onCreate }) => {
 };
 
 export default CreatePPMServicePlan;
+
+
 
 
 

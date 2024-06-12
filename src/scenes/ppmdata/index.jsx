@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, TextField, MenuItem, Select } from '@mui/material';
-import { useMutation, useQuery } from '@apollo/client';
+import { Box, Typography, Button, Checkbox } from '@mui/material';
+import { useQuery } from '@apollo/client';
 import { DataGrid, GridActionsCellItem, GridToolbar } from '@mui/x-data-grid';
 import EditIcon from '@mui/icons-material/Edit';
 import { useNavigate } from 'react-router-dom';
 import { GET_PPM_SERVICE_PLANS, GET_SUPPLIERS } from '../../api/queries/ppmdata';
-import { UPDATE_SINGLE_PPM_SERVICE_PLAN } from '../../api/mutations/ppmdata';
 import { tokens } from '../../theme';
 import { useTheme } from '@mui/material/styles';
 import Header from '../../components/Header';
 import CreatePPMServicePlan from '../../components/createppm';
+import BulkChangeModal from './BulkChangeModal';
 
 const PPMData = () => {
   const theme = useTheme();
@@ -23,11 +23,6 @@ const PPMData = () => {
   const [allSelected, setAllSelected] = useState(false);
   const [open, setOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [newValue, setNewValue] = useState('');
-  const [updateField, setUpdateField] = useState('ppm_cost');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [amount, setAmount] = useState('');
-  const [unit, setUnit] = useState('days');
   const [columnVisibilityModel, setColumnVisibilityModel] = useState({
     ppm_status: false,
     ppm_type: false,
@@ -37,18 +32,32 @@ const PPMData = () => {
     next_service_date: false,
   });
 
-  const [updateSinglePPMServicePlan] = useMutation(UPDATE_SINGLE_PPM_SERVICE_PLAN);
-
   useEffect(() => {
     if (data && data.ppm_service_plan) {
       const formattedRows = data.ppm_service_plan.flatMap((plan) =>
         plan.ppm_building_service_plans.map((bsp) => ({
-          ...plan,
-          id: `${plan.ppm_id}-${bsp.building.bld_name}`, // Ensure unique ID for each row
+          id: bsp.ppm_bsp_key,
+          ppm_fk_ppm_id: bsp.ppm_fk_ppm_id,
+          ppm_id: plan.ppm_id,
+          ppm_key: plan.ppm_key,
+          ppm_service_name: plan.ppm_service_name,
+          ppm_schedule: plan.ppm_schedule,
+          ppm_frequency: plan.ppm_frequency,
+          last_service_date: plan.last_service_date,
+          next_service_date: plan.next_service_date,
+          ppm_cost: bsp.ppm_cost,
+          ppm_status: plan.ppm_status,
+          ppm_type: plan.ppm_type,
+          ppm_standard: plan.ppm_standard,
+          notes: plan.notes,
+          compliance_ppm_expiry: plan.compliance_ppm_expiry,
+          compliance_ppm: plan.compliance_ppm,
+          disc_name: plan.ppm_discipline?.disc_name || 'N/A',
+          disc_id: plan.ppm_discipline?.disc_id || 'N/A',
+          sup_name: plan.supplier?.sup_name || 'N/A',
+          bld_id: bsp.fk_bld_id,
           bld_name: bsp.building.bld_name || 'N/A',
           org_name: bsp.building.organization.org_name || 'N/A',
-          disc_name: plan.ppm_discipline?.disc_name || 'N/A',
-          sup_name: plan.supplier?.sup_name || 'N/A',
           ppm_bsp_key: bsp.ppm_bsp_key,
         }))
       );
@@ -56,15 +65,15 @@ const PPMData = () => {
     }
   }, [data]);
 
-  const handleEditClick = (id, disc_id, bld_id) => () => {
-    navigate(`/ppmdetail/${id}?disc_id=${disc_id}&bld_id=${bld_id}`);
+  const handleEditClick = (ppm_id, disc_id, bld_id) => () => {
+    navigate(`/ppmdetail/${ppm_id}?disc_id=${disc_id}&bld_id=${bld_id}`);
   };
 
-  const handleCheckboxChange = (id) => {
+  const handleCheckboxChange = (ppm_bsp_key) => {
     setSelectedIds((prevSelected) =>
-      prevSelected.includes(id)
-        ? prevSelected.filter((selectedId) => selectedId !== id)
-        : [...prevSelected, id]
+      prevSelected.includes(ppm_bsp_key)
+        ? prevSelected.filter((selectedId) => selectedId !== ppm_bsp_key)
+        : [...prevSelected, ppm_bsp_key]
     );
   };
 
@@ -72,7 +81,8 @@ const PPMData = () => {
     if (allSelected) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(rows.map((row) => row.id));
+      const allBspKeys = rows.map((row) => row.ppm_bsp_key);
+      setSelectedIds(allBspKeys);
     }
     setAllSelected(!allSelected);
   };
@@ -83,7 +93,6 @@ const PPMData = () => {
 
   const handleClose = () => {
     setOpen(false);
-    setErrorMessage('');
   };
 
   const handleDialogOpen = () => {
@@ -92,86 +101,6 @@ const PPMData = () => {
 
   const handleDialogClose = () => {
     setDialogOpen(false);
-  };
-
-  const handleValueChange = (event) => {
-    setNewValue(event.target.value);
-  };
-
-  const handleAmountChange = (event) => {
-    setAmount(event.target.value);
-  };
-
-  const handleUnitChange = (event) => {
-    setUnit(event.target.value);
-  };
-
-  const handleFieldChange = (event) => {
-    setUpdateField(event.target.value);
-    setNewValue('');
-    setAmount('');
-    setUnit('days');
-    setErrorMessage('');
-  };
-
-  const validateInput = () => {
-    let isValid = true;
-    let error = '';
-    if (updateField === 'ppm_cost') {
-      if (!/^\d+$/.test(newValue)) {
-        isValid = false;
-        error = 'Cost must be an integer.';
-      }
-    } else if (updateField === 'ppm_frequency') {
-      if (!/^\d+$/.test(amount)) {
-        isValid = false;
-        error = 'Frequency amount must be a number.';
-      }
-    } else if (updateField === 'ppm_schedule') {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(newValue)) {
-        isValid = false;
-        error = 'Schedule must be in yyyy-mm-dd format.';
-      }
-    } else if (updateField === 'sup_name') {
-      if (newValue.trim() === '') {
-        isValid = false;
-        error = 'Supplier name cannot be empty.';
-      }
-    }
-    setErrorMessage(error);
-    return isValid;
-  };
-
-  const handleUpdate = async () => {
-    if (!validateInput()) {
-      return;
-    }
-
-    try {
-      for (const id of selectedIds) {
-        const updateValue =
-          updateField === 'sup_name'
-            ? { fk_sup_id: supplierData.suppliers.find((sup) => sup.sup_name === newValue).sup_id }
-            : { [updateField]: updateField === 'ppm_frequency' ? `${amount} ${unit}` : newValue };
-
-        const ppmId = id.split('-')[0];
-        await updateSinglePPMServicePlan({
-          variables: { ppm_id: parseInt(ppmId), fields: updateValue },
-        });
-      }
-      const updatedRows = rows.map((row) => {
-        if (selectedIds.includes(row.id)) {
-          return { ...row, [updateField]: updateField === 'ppm_frequency' ? `${amount} ${unit}` : newValue };
-        }
-        return row;
-      });
-      setRows(updatedRows);
-      setSelectedIds([]);
-      setAllSelected(false);
-      setOpen(false);
-    } catch (error) {
-      console.error('Error updating PPM service plan', error);
-    }
   };
 
   const handleColumnVisibilityModelChange = (newModel) => {
@@ -203,7 +132,7 @@ const PPMData = () => {
         />
       ),
       renderCell: (params) => (
-        <Checkbox checked={selectedIds.includes(params.row.id)} onChange={() => handleCheckboxChange(params.row.id)} />
+        <Checkbox checked={selectedIds.includes(params.row.ppm_bsp_key)} onChange={() => handleCheckboxChange(params.row.ppm_bsp_key)} />
       ),
       hide: true,
     },
@@ -281,67 +210,18 @@ const PPMData = () => {
         </Button>
       </Box>
       <CreatePPMServicePlan open={dialogOpen} onClose={handleDialogClose} onCreate={refetch} />
-      <Dialog open={open} onClose={handleClose}>
-        <DialogTitle>Update PPM Service Plan</DialogTitle>
-        <DialogContent>
-          <DialogContentText>Select the field to update and enter the new value for the selected PPM service plans.</DialogContentText>
-          <Select value={updateField} onChange={handleFieldChange} fullWidth margin='dense'>
-            <MenuItem value='ppm_cost'>Cost</MenuItem>
-            <MenuItem value='ppm_schedule'>Schedule</MenuItem>
-            <MenuItem value='ppm_frequency'>Frequency</MenuItem>
-            <MenuItem value='sup_name'>Supplier</MenuItem>
-          </Select>
-          {updateField === 'sup_name' ? (
-            <Select value={newValue} onChange={handleValueChange} fullWidth margin='dense'>
-              {supplierData?.suppliers.map((supplier) => (
-                <MenuItem key={supplier.sup_id} value={supplier.sup_name}>
-                  {supplier.sup_name}
-                </MenuItem>
-              ))}
-            </Select>
-          ) : updateField === 'ppm_frequency' ? (
-            <>
-              <TextField
-                autoFocus
-                margin='dense'
-                label='Amount'
-                type='number'
-                fullWidth
-                value={amount}
-                onChange={handleAmountChange}
-                error={Boolean(errorMessage)}
-                helperText={errorMessage}
-              />
-              <Select value={unit} onChange={handleUnitChange} fullWidth margin='dense'>
-                <MenuItem value='days'>Days</MenuItem>
-                <MenuItem value='weeks'>Weeks</MenuItem>
-                <MenuItem value='months'>Months</MenuItem>
-                <MenuItem value='years'>Years</MenuItem>
-              </Select>
-            </>
-          ) : (
-            <TextField
-              autoFocus
-              margin='dense'
-              label='New Value'
-              type='text'
-              fullWidth
-              value={newValue}
-              onChange={handleValueChange}
-              error={Boolean(errorMessage)}
-              helperText={errorMessage}
-            />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose} color='primary'>
-            Cancel
-          </Button>
-          <Button onClick={handleUpdate} color='primary'>
-            Update
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <BulkChangeModal
+        open={open}
+        onClose={handleClose}
+        selectedIds={selectedIds}
+        supplierData={supplierData}
+        refetch={refetch}
+        rows={rows}
+        data={data}
+        setRows={setRows}
+        setSelectedIds={setSelectedIds}
+        setAllSelected={setAllSelected}
+      />
       <Box
         m='40px 0 0 0'
         height='75vh'
@@ -398,8 +278,6 @@ const PPMData = () => {
 };
 
 export default PPMData;
-
-
 
 
 
