@@ -19,6 +19,7 @@ export const GET_PPM_SERVICE_PLANS = gql`
     compliance_ppm
     ppm_discipline {
       disc_name
+      disc_id
     }
     supplier {
       sup_name

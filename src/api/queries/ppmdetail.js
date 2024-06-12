@@ -44,36 +44,39 @@ export const GET_PPM_BY_PK = gql`
 
 // GET_ASSETS_BY_DISCIPLINE_AND_BUILDING query
 export const GET_ASSETS_BY_DISCIPLINE_AND_BUILDING = gql`
-  query GetAssetsByDisciplineAndBuilding($fk_disc_id: Int!, $fk_pk_bld_id: Int!) {
-    vw_asset_bld_org(where: {disc_id: {_eq: $fk_disc_id}, bld_id: {_eq: $fk_pk_bld_id}}) {
+  query GetAssetsByDisciplineAndBuilding($fk_disc_id: Int!, $bld_id: Int!) {
+    vw_asset_bld_org(where: {disc_id: {_eq: $fk_disc_id}, bld_id: {_eq: $bld_id}}) {
       as_id
       as_name
+      disc_id
+      bld_id
     }
   }
-`;
-export const GET_ASSETS_OVERVIEW = gql`
-query GetAssetsOverview($ppm_id: Int!) {
-  ppm_service_plan_by_pk(ppm_id: $ppm_id) {
-    fk_disc_id
-    ppm_building_service_plans {
-      fk_bld_id
-    }
-  }
-}
 `;
 
-export const GET_LINKED_ASSETS = gql`
-query GetLinkedAssets($ppm_id: Int!) {
-  ppm_asset_service_plan(where: { ppm_fk_ppm_id: { _eq: $ppm_id } }) {
-    asset {
-      as_id
-      as_name
-      location {
+export const GET_ASSETS_OVERVIEW = gql`
+  query GetAssetsOverview($ppm_id: Int!) {
+    ppm_service_plan_by_pk(ppm_id: $ppm_id) {
+      fk_disc_id
+      ppm_building_service_plans {
         fk_bld_id
       }
     }
   }
-}
+`;
+
+export const GET_LINKED_ASSETS = gql`
+  query GetLinkedAssets($ppm_id: Int!, $bld_id: Int!) {
+    ppm_asset_service_plan(where: { ppm_fk_ppm_id: { _eq: $ppm_id }, asset: { location: { fk_bld_id: { _eq: $bld_id } } } }) {
+      asset {
+        as_id
+        as_name
+        location {
+          fk_bld_id
+        }
+      }
+    }
+  }
 `;
 
 export const GET_ASSETS_BY_PPM = gql`

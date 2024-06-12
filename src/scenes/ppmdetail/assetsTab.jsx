@@ -1,30 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { Box, Typography, Select, MenuItem, Button, List, ListItem, ListItemText, IconButton, FormControl, InputLabel, Snackbar } from '@mui/material';
+import { Box, Typography, Select, MenuItem, Button, List, ListItem, ListItemText, IconButton, FormControl, InputLabel, Snackbar, useTheme } from '@mui/material';
 import { Delete as DeleteIcon } from '@mui/icons-material';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { useLocation } from 'react-router-dom';
-import { GET_ASSETS_OVERVIEW, GET_LINKED_ASSETS, GET_ASSETS_BY_DISCIPLINE_AND_BUILDING } from "../../api/queries/ppmdetail";
+import { GET_LINKED_ASSETS, GET_ASSETS_BY_DISCIPLINE_AND_BUILDING } from "../../api/queries/ppmdetail";
 import { ADD_ASSET_TO_PPM, DELETE_ASSET_FROM_PPM } from "../../api/mutations/ppmdetail";
+import { tokens } from '../../theme';
+import { styled } from '@mui/material/styles';
+
+const StyledFormControl = styled(FormControl)(({ theme }) => ({
+  '& .MuiInputBase-root': {
+    borderColor: theme.palette.mode === 'dark' ? '#fff' : '#000',
+    '&:before, &:after': {
+      borderColor: theme.palette.mode === 'dark' ? '#fff' : '#000',
+    },
+  },
+  '& .MuiInputLabel-root': {
+    color: theme.palette.mode === 'dark' ? '#fff' : '#000',
+  },
+  '& .MuiSelect-select': {
+    borderColor: theme.palette.mode === 'dark' ? '#fff' : '#000',
+  },
+}));
 
 const AssetsTab = ({ ppm_id, refetch }) => {
+  const theme = useTheme();
+  const colors = tokens(theme.palette.mode);
+
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const bld_id = queryParams.get('bld_id');
   const disc_id = queryParams.get('disc_id');
 
-  const { data: assetsOverviewData, loading: assetsOverviewLoading, error: assetsOverviewError, refetch: refetchAssetsOverview } = useQuery(GET_ASSETS_OVERVIEW, {
-    variables: { ppm_id: parseInt(ppm_id) },
+  const { data: linkedAssetsData, loading: linkedAssetsLoading = true, error: linkedAssetsError, refetch: refetchLinkedAssets } = useQuery(GET_LINKED_ASSETS, {
+    variables: { ppm_id: parseInt(ppm_id), bld_id: parseInt(bld_id) },
   });
 
-  const { data: linkedAssetsData, loading: linkedAssetsLoading, error: linkedAssetsError, refetch: refetchLinkedAssets } = useQuery(GET_LINKED_ASSETS, {
-    variables: { ppm_id: parseInt(ppm_id) },
-  });
-
-  const { data: availableAssetsData, refetch: refetchAvailableAssets } = useQuery(GET_ASSETS_BY_DISCIPLINE_AND_BUILDING, {
+  const { data: availableAssetsData, loading: availableAssetsLoading = true, error: availableAssetsError, refetch: refetchAvailableAssets } = useQuery(GET_ASSETS_BY_DISCIPLINE_AND_BUILDING, {
     skip: !disc_id || !bld_id,
-    variables: { fk_disc_id: parseInt(disc_id), fk_pk_bld_id: parseInt(bld_id) },
+    variables: { fk_disc_id: parseInt(disc_id), bld_id: parseInt(bld_id) },
   });
 
   const [addAssetToPPM] = useMutation(ADD_ASSET_TO_PPM, {
@@ -34,7 +50,6 @@ const AssetsTab = ({ ppm_id, refetch }) => {
     },
     onCompleted: () => {
       refetchLinkedAssets();
-      refetchAssetsOverview();
       refetchAvailableAssets();
       setSnackbarMessage('Asset added successfully!');
       setSnackbarOpen(true);
@@ -48,71 +63,50 @@ const AssetsTab = ({ ppm_id, refetch }) => {
     },
     onCompleted: () => {
       refetchLinkedAssets();
-      refetchAssetsOverview();
       refetchAvailableAssets();
       setSnackbarMessage('Asset deleted successfully!');
       setSnackbarOpen(true);
+      setEditMode(false); // Exit edit mode after deleting an asset
     }
   });
 
-  const [editMode, setEditMode] = useState(false);
-  const [availableAssets, setAvailableAssets] = useState([]);
   const [linkedAssets, setLinkedAssets] = useState([]);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [availableAssets, setAvailableAssets] = useState([]);
+  const [editMode, setEditMode] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [dropdownValue, setDropdownValue] = useState('');
 
   useEffect(() => {
-    if (linkedAssetsData && availableAssetsData) {
-      const linked = linkedAssetsData.ppm_asset_service_plan
-        .filter(l => l.asset.location?.fk_bld_id === parseInt(bld_id)) // Ensure linked assets are filtered by building ID
-        .map(a => a.asset);
-      const available = availableAssetsData.asset.filter(a =>
+    if (!linkedAssetsLoading && !availableAssetsLoading && linkedAssetsData && linkedAssetsData.ppm_asset_service_plan && availableAssetsData && availableAssetsData.vw_asset_bld_org) {
+      const linked = linkedAssetsData.ppm_asset_service_plan.map(a => a.asset);
+
+      const available = availableAssetsData.vw_asset_bld_org.filter(a =>
         !linked.find(la => la.as_id === a.as_id)
       );
 
       setLinkedAssets(linked);
       setAvailableAssets(available);
     }
-  }, [linkedAssetsData, availableAssetsData, bld_id]);
-
-  const handleAddAssets = async (values) => {
-    try {
-      for (const assetId of values.assetsToAdd) {
-        await addAssetToPPM({ variables: { fk_as_id: assetId, ppm_fk_ppm_id: parseInt(ppm_id) } });
-      }
-      setEditMode(false);
-    } catch (error) {
-      console.error("Error adding assets:", error);
-    }
-  };
-
-  const handleRemoveAsset = async (assetId) => {
-    try {
-      await deleteAssetFromPPM({ variables: { fk_as_id: assetId, ppm_fk_ppm_id: parseInt(ppm_id) } });
-    } catch (error) {
-      console.error("Error removing asset:", error);
-    }
-  };
+  }, [linkedAssetsData, availableAssetsData, linkedAssetsLoading, availableAssetsLoading]);
 
   const handleSnackbarClose = () => {
     setSnackbarOpen(false);
-    setSnackbarMessage('');
   };
 
-  const validationSchema = Yup.object().shape({
-    assetsToAdd: Yup.array().of(Yup.number()).required('Select at least one asset to add.')
-  });
+  const handleRemoveAsset = (as_id) => {
+    deleteAssetFromPPM({ variables: { fk_as_id: as_id, ppm_fk_ppm_id: parseInt(ppm_id) } });
+  };
 
-  if (assetsOverviewLoading || linkedAssetsLoading) return <p>Loading...</p>;
-  if (assetsOverviewError) return <p>Error loading assets overview: {assetsOverviewError.message}</p>;
-  if (linkedAssetsError) return <p>Error loading linked assets: {linkedAssetsError.message}</p>;
+  if (linkedAssetsLoading || availableAssetsLoading) return <Typography>Loading...</Typography>;
+  if (linkedAssetsError || availableAssetsError) return <Typography>Error loading data</Typography>;
 
   return (
-    <Box display="flex" flexDirection="column" gap="16px">
+    <Box>
       <Typography variant="h6">Linked Assets</Typography>
       <List>
-        {linkedAssets.map((asset, index) => (
-          <ListItem key={index}>
+        {linkedAssets.map((asset) => (
+          <ListItem key={asset.as_id}>
             <ListItemText primary={asset.as_name} />
             {editMode && (
               <IconButton onClick={() => handleRemoveAsset(asset.as_id)} color="secondary">
@@ -124,29 +118,62 @@ const AssetsTab = ({ ppm_id, refetch }) => {
       </List>
       {editMode ? (
         <Formik
-          initialValues={{ assetsToAdd: [] }}
-          validationSchema={validationSchema}
-          onSubmit={handleAddAssets}
+          initialValues={{ assetsToAdd: [], selectedAssetId: '' }}
+          validationSchema={Yup.object().shape({
+            assetsToAdd: Yup.array().min(1, 'Select at least one asset').required('Required'),
+          })}
+          onSubmit={async (values, { setSubmitting }) => {
+            try {
+              for (const asset of values.assetsToAdd) {
+                await addAssetToPPM({ variables: { fk_as_id: asset.as_id, ppm_fk_ppm_id: parseInt(ppm_id) } });
+              }
+              setSubmitting(false);
+              refetchLinkedAssets();  // Refetch the linked assets
+              setEditMode(false);
+            } catch (error) {
+              console.error(error);
+            }
+          }}
         >
-          {({ values, handleChange, handleSubmit }) => (
-            <Form onSubmit={handleSubmit}>
-              <FormControl fullWidth>
-                <InputLabel>Assets</InputLabel>
-                <Select
-                  multiple
-                  name="assetsToAdd"
-                  value={values.assetsToAdd}
-                  onChange={handleChange}
-                  renderValue={(selected) => selected.map((id) => availableAssets.find(asset => asset.as_id === id)?.as_name).join(', ')}
-                >
-                  {availableAssets.map((asset) => (
-                    <MenuItem key={asset.as_id} value={asset.as_id}>
-                      {asset.as_name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <Box display="flex" justifyContent="flex-end" gap="16px">
+          {({ values, setFieldValue }) => (
+            <Form>
+              <List>
+                {values.assetsToAdd.map((asset, index) => (
+                  <ListItem key={asset.as_id}>
+                    <ListItemText primary={asset.as_name} />
+                    <IconButton onClick={() => {
+                      const newAssetsToAdd = values.assetsToAdd.filter((_, i) => i !== index);
+                      setFieldValue('assetsToAdd', newAssetsToAdd);
+                    }} color="secondary">
+                      <DeleteIcon />
+                    </IconButton>
+                  </ListItem>
+                ))}
+              </List>
+              <Box mt={2}>
+                <StyledFormControl fullWidth>
+                  <InputLabel style={{ color: colors.grey[100] }}>Assets</InputLabel>
+                  <Select
+                    style={{ border: colors.grey[100] }}
+                    value={dropdownValue}
+                    onChange={(event) => {
+                      const selectedAssetId = event.target.value;
+                      const selectedAsset = availableAssets.find(asset => asset.as_id === selectedAssetId);
+                      if (selectedAsset) {
+                        setFieldValue('assetsToAdd', [selectedAsset, ...values.assetsToAdd]);
+                        setDropdownValue(''); // Reset dropdown value
+                      }
+                    }}
+                  >
+                    {availableAssets.map((asset) => (
+                      <MenuItem key={asset.as_id} value={asset.as_id}>
+                        {asset.as_name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </StyledFormControl>
+              </Box>
+              <Box display="flex" justifyContent="flex-end" gap="16px" mt={2}>
                 <Button variant="contained" color="secondary" onClick={() => setEditMode(false)}>
                   Cancel
                 </Button>
@@ -175,7 +202,6 @@ const AssetsTab = ({ ppm_id, refetch }) => {
 };
 
 export default AssetsTab;
-
 
 
 

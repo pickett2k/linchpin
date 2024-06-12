@@ -14,15 +14,25 @@ const AssetManagement = () => {
   const colors = tokens(theme.palette.mode);
   const navigate = useNavigate();
 
-  const { loading: overviewLoading, error: overviewError, data: overviewData } = useQuery(GET_ASSET_OVERVIEW);
-  const { loading: detailsLoading, error: detailsError, data: detailsData, refetch } = useQuery(GET_ASSET);
-  const { loading: categoriesLoading, error: categoriesError, data: categoriesData } = useQuery(GET_CATEGORIES);
+  const { loading: overviewLoading, error: overviewError, data: overviewData, refetch: refetchOverview } = useQuery(GET_ASSET_OVERVIEW);
+  const { loading: detailsLoading, error: detailsError, data: detailsData, refetch: refetchDetails } = useQuery(GET_ASSET);
+  const { loading: categoriesLoading, error: categoriesError, data: categoriesData, refetch: refetchCategories } = useQuery(GET_CATEGORIES);
 
   const [mergedData, setMergedData] = useState([]);
   const [showArchived, setShowArchived] = useState(false);
 
+  const refetchAllData = () => {
+    refetchOverview();
+    refetchDetails();
+    refetchCategories();
+  };
+
   useEffect(() => {
     if (overviewData && detailsData && categoriesData) {
+      console.log("Overview Data:", overviewData); // Debug statement
+      console.log("Details Data:", detailsData); // Debug statement
+      console.log("Categories Data:", categoriesData); // Debug statement
+
       const detailsMap = new Map(detailsData.asset.map(item => [item.as_id, item]));
       const categoriesMap = new Map(categoriesData.as_category.map(item => [item.as_cat_id, {
         as_cat_name: item.as_cat_name,
@@ -35,6 +45,8 @@ const AssetManagement = () => {
         ...detailsMap.get(item.as_id),
         ...(detailsMap.get(item.as_id)?.fk_as_cat_id ? categoriesMap.get(detailsMap.get(item.as_id).fk_as_cat_id) : {})
       })).filter(item => !item.as_deleted);
+
+      console.log('Merged Data:', merged); // Debug statement
       setMergedData(merged);
     }
   }, [overviewData, detailsData, categoriesData]);
@@ -47,7 +59,10 @@ const AssetManagement = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const openModal = () => setIsModalOpen(true);
-  const closeModal = () => setIsModalOpen(false);
+  const closeModal = () => {
+    setIsModalOpen(false);
+    refetchAllData(); // Refetch data after closing modal
+  };
 
   const [columnVisibilityModel, setColumnVisibilityModel] = useState({
     as_archived: false,
@@ -81,6 +96,7 @@ const AssetManagement = () => {
   };
 
   const filteredData = mergedData.filter(item => item.as_archived === showArchived);
+  console.log('Filtered Data:', filteredData); // Debug statement
 
   const columns = [
     { field: "as_id", headerName: "ID", align: 'center', headerAlign: 'center' },
@@ -231,12 +247,14 @@ const AssetManagement = () => {
         />
       </Box>
 
-      <AssetModal isOpen={isModalOpen} onClose={closeModal} refetchAssets={refetch} />
+      <AssetModal isOpen={isModalOpen} onClose={closeModal} refetchAssets={refetchAllData} />
     </Box>
   );
 };
 
 export default AssetManagement;
+
+
 
 
 
